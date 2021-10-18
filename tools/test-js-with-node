@@ -50,6 +50,7 @@ EXEMPT_FILES = {
     "static/js/compose_closed_ui.js",
     "static/js/composebox_typeahead.js",
     "static/js/compose_fade.js",
+    "static/js/compose_fade_helper.js",
     "static/js/compose_validate.js",
     "static/js/compose.js",
     "static/js/compose_ui.js",

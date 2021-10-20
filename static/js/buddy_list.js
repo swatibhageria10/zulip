@@ -231,11 +231,11 @@ export class BuddyList extends BuddyListConf {
     }
 
     insert_new_html(opts) {
-        const other_key = opts.other_key;
+        const new_key = opts.new_key;
         const html = opts.html;
         // const pos = opts.pos;
 
-        if (other_key === undefined) {
+        if (new_key === undefined) {
             //     if (pos === this.render_count) {
             //         this.render_count += 1;
             this.container.append(html);
@@ -246,7 +246,7 @@ export class BuddyList extends BuddyListConf {
 
         // if (pos < this.render_count) {
         //     this.render_count += 1;
-        const li = this.find_li({key: other_key});
+        const li = this.find_li({key: new_key});
         li.before(html);
         // this.update_padding();
         // }
@@ -262,10 +262,10 @@ export class BuddyList extends BuddyListConf {
             key,
         });
 
-        // Order is important here--get the other_key
+        // Order is important here--get the new_key
         // before mutating our list.  An undefined value
         // corresponds to appending.
-        const other_key = this.keys[pos];
+        const new_key = this.keys[pos];
 
         this.keys.splice(pos, 0, key);
 
@@ -273,7 +273,7 @@ export class BuddyList extends BuddyListConf {
         this.insert_new_html({
             pos,
             html,
-            other_key,
+            new_key,
         });
     }
 

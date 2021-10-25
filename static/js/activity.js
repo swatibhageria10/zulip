@@ -251,8 +251,6 @@ export function initialize() {
 
     build_user_sidebar();
 
-    buddy_list.start_scroll_handler();
-
     // Let the server know we're here, but pass "false" for
     // want_redraw, since we just got all this info in page_params.
     send_presence_to_server(false);

@@ -3,11 +3,11 @@ import $ from "jquery";
 import render_user_presence_row from "../templates/user_presence_row.hbs";
 import render_user_presence_rows from "../templates/user_presence_rows.hbs";
 
-import * as blueslip from "./blueslip";
+// import * as blueslip from "./blueslip";
 import * as buddy_data from "./buddy_data";
-import * as message_viewport from "./message_viewport";
-import * as padded_widget from "./padded_widget";
-import * as ui from "./ui";
+// import * as message_viewport from "./message_viewport";
+// import * as padded_widget from "./padded_widget";
+// import * as ui from "./ui";
 
 class BuddyListConf {
     container_sel = "#user_presences";
@@ -17,7 +17,9 @@ class BuddyListConf {
 
     items_to_html(opts) {
         const user_info = opts.items;
-        const html = render_user_presence_rows({users: user_info});
+        const html = render_user_presence_rows({
+            users: user_info,
+        });
         return html;
     }
 
@@ -44,15 +46,15 @@ class BuddyListConf {
 
     compare_function = buddy_data.compare_function;
 
-    height_to_fill() {
-        // Because the buddy list gets sized dynamically, we err on the side
-        // of using the height of the entire viewport for deciding
-        // how much content to render.  Even on tall monitors this should
-        // still be a significant optimization for orgs with thousands of
-        // users.
-        const height = message_viewport.height();
-        return height;
-    }
+    // height_to_fill() {
+    //     // Because the buddy list gets sized dynamically, we err on the side
+    //     // of using the height of the entire viewport for deciding
+    //     // how much content to render.  Even on tall monitors this should
+    //     // still be a significant optimization for orgs with thousands of
+    //     // users.
+    //     const height = message_viewport.height();
+    //     return height;
+    // }
 }
 
 export class BuddyList extends BuddyListConf {
@@ -66,40 +68,53 @@ export class BuddyList extends BuddyListConf {
         // in already-sorted order.
         this.keys = opts.keys;
 
-        this.fill_screen_with_content();
-    }
-
-    render_more(opts) {
-        const chunk_size = opts.chunk_size;
-
-        const begin = this.render_count;
-        const end = begin + chunk_size;
-
-        const more_keys = this.keys.slice(begin, end);
-
-        if (more_keys.length === 0) {
+        if (this.keys.length === 0) {
             return;
         }
 
         const items = this.get_data_from_keys({
-            keys: more_keys,
+            keys: this.keys,
         });
 
         const html = this.items_to_html({
             items,
         });
+
         this.container = $(this.container_sel);
         this.container.append(html);
-
-        // Invariant: more_keys.length >= items.length.
-        // (Usually they're the same, but occasionally keys
-        // won't return valid items.  Even though we don't
-        // actually render these keys, we still "count" them
-        // as rendered.
-
-        this.render_count += more_keys.length;
-        this.update_padding();
     }
+
+    // render_more(opts) {
+    //     const chunk_size = opts.chunk_size;
+
+    //     const begin = this.render_count;
+    //     const end = begin + chunk_size;
+
+    //     const more_keys = this.keys.slice(begin, end);
+
+    //     if (more_keys.length === 0) {
+    //         return;
+    //     }
+
+    //     const items = this.get_data_from_keys({
+    //         keys: more_keys,
+    //     });
+
+    //     const html = this.items_to_html({
+    //         items,
+    //     });
+    //     this.container = $(this.container_sel);
+    //     this.container.append(html);
+
+    //     // Invariant: more_keys.length >= items.length.
+    //     // (Usually they're the same, but occasionally keys
+    //     // won't return valid items.  Even though we don't
+    //     // actually render these keys, we still "count" them
+    //     // as rendered.
+
+    //     this.render_count += more_keys.length;
+    //     this.update_padding();
+    // }
 
     get_items() {
         const obj = this.container.find(`${this.item_sel}`);
@@ -139,12 +154,12 @@ export class BuddyList extends BuddyListConf {
 
         this.keys.splice(pos, 1);
 
-        if (pos < this.render_count) {
-            this.render_count -= 1;
-            const li = this.find_li({key: opts.key});
-            li.remove();
-            this.update_padding();
-        }
+        // if (pos < this.render_count) {
+        // this.render_count -= 1;
+        const li = this.find_li({key: opts.key});
+        li.remove();
+        // this.update_padding();
+        // }
     }
 
     find_position(opts) {
@@ -162,55 +177,55 @@ export class BuddyList extends BuddyListConf {
         return this.keys.length;
     }
 
-    force_render(opts) {
-        const pos = opts.pos;
+    // force_render(opts) {
+    //     const pos = opts.pos;
 
-        // Try to render a bit optimistically here.
-        const cushion_size = 3;
-        const chunk_size = pos + cushion_size - this.render_count;
+    //     // Try to render a bit optimistically here.
+    //     const cushion_size = 3;
+    //     const chunk_size = pos + cushion_size - this.render_count;
 
-        if (chunk_size <= 0) {
-            blueslip.error("cannot show key at this position: " + pos);
-        }
+    //     if (chunk_size <= 0) {
+    //         blueslip.error("cannot show key at this position: " + pos);
+    //     }
 
-        this.render_more({
-            chunk_size,
-        });
-    }
+    //     this.render_more({
+    //         chunk_size,
+    //     });
+    // }
 
     find_li(opts) {
         const key = opts.key;
 
         // Try direct DOM lookup first for speed.
-        let li = this.get_li_from_key({
+        const li = this.get_li_from_key({
             key,
         });
 
-        if (li.length === 1) {
-            return li;
-        }
+        // if (li.length === 1) {
+        //     return li;
+        // }
 
-        if (!opts.force_render) {
-            // Most callers don't force us to render a list
-            // item that wouldn't be on-screen anyway.
-            return li;
-        }
+        // if (!opts.force_render) {
+        //     // Most callers don't force us to render a list
+        //     // item that wouldn't be on-screen anyway.
+        //     return li;
+        // }
 
-        const pos = this.keys.indexOf(key);
+        // const pos = this.keys.indexOf(key);
 
-        if (pos < 0) {
-            // TODO: See ListCursor.get_row() for why this is
-            //       a bit janky now.
-            return [];
-        }
+        // if (pos < 0) {
+        //     // TODO: See ListCursor.get_row() for why this is
+        //     //       a bit janky now.
+        //     return [];
+        // }
 
-        this.force_render({
-            pos,
-        });
+        // this.force_render({
+        //     pos,
+        // });
 
-        li = this.get_li_from_key({
-            key,
-        });
+        // li = this.get_li_from_key({
+        //     key,
+        // });
 
         return li;
     }
@@ -218,23 +233,23 @@ export class BuddyList extends BuddyListConf {
     insert_new_html(opts) {
         const other_key = opts.other_key;
         const html = opts.html;
-        const pos = opts.pos;
+        // const pos = opts.pos;
 
         if (other_key === undefined) {
-            if (pos === this.render_count) {
-                this.render_count += 1;
-                this.container.append(html);
-                this.update_padding();
-            }
+            //     if (pos === this.render_count) {
+            //         this.render_count += 1;
+            this.container.append(html);
+            // this.update_padding();
+            //     }
             return;
         }
 
-        if (pos < this.render_count) {
-            this.render_count += 1;
-            const li = this.find_li({key: other_key});
-            li.before(html);
-            this.update_padding();
-        }
+        // if (pos < this.render_count) {
+        //     this.render_count += 1;
+        const li = this.find_li({key: other_key});
+        li.before(html);
+        // this.update_padding();
+        // }
     }
 
     insert_or_move(opts) {
@@ -262,52 +277,52 @@ export class BuddyList extends BuddyListConf {
         });
     }
 
-    fill_screen_with_content() {
-        let height = this.height_to_fill();
+    // fill_screen_with_content() {
+    //     let height = this.height_to_fill();
 
-        const elem = ui.get_scroll_element($(this.scroll_container_sel)).expectOne()[0];
+    //     const elem = ui.get_scroll_element($(this.scroll_container_sel)).expectOne()[0];
 
-        // Add a fudge factor.
-        height += 10;
+    //     // Add a fudge factor.
+    //     height += 10;
 
-        while (this.render_count < this.keys.length) {
-            const padding_height = $(this.padding_sel).height();
-            const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
+    //     while (this.render_count < this.keys.length) {
+    //         const padding_height = $(this.padding_sel).height();
+    //         const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
 
-            if (bottom_offset > height) {
-                break;
-            }
+    //         if (bottom_offset > height) {
+    //             break;
+    //         }
 
-            const chunk_size = 20;
+    //         const chunk_size = 20;
 
-            this.render_more({
-                chunk_size,
-            });
-        }
-    }
+    //         this.render_more({
+    //             chunk_size,
+    //         });
+    //     }
+    // }
 
     // This is a bit of a hack to make sure we at least have
     // an empty list to start, before we get the initial payload.
     container = $(this.container_sel);
 
-    start_scroll_handler() {
-        // We have our caller explicitly call this to make
-        // sure everything's in place.
-        const scroll_container = ui.get_scroll_element($(this.scroll_container_sel));
+    // start_scroll_handler() {
+    //     // We have our caller explicitly call this to make
+    //     // sure everything's in place.
+    //     const scroll_container = ui.get_scroll_element($(this.scroll_container_sel));
 
-        scroll_container.on("scroll", () => {
-            this.fill_screen_with_content();
-        });
-    }
+    //     scroll_container.on("scroll", () => {
+    //         this.fill_screen_with_content();
+    //     });
+    // }
 
-    update_padding() {
-        padded_widget.update_padding({
-            shown_rows: this.render_count,
-            total_rows: this.keys.length,
-            content_sel: this.container_sel,
-            padding_sel: this.padding_sel,
-        });
-    }
+    // update_padding() {
+    //     padded_widget.update_padding({
+    //         shown_rows: this.render_count,
+    //         total_rows: this.keys.length,
+    //         content_sel: this.container_sel,
+    //         padding_sel: this.padding_sel,
+    //     });
+    // }
 }
 
 export const buddy_list = new BuddyList();

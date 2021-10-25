@@ -20,7 +20,7 @@ const _document = {
 
 const channel = mock_esm("../../static/js/channel");
 const compose_state = mock_esm("../../static/js/compose_state");
-const padded_widget = mock_esm("../../static/js/padded_widget");
+// const padded_widget = mock_esm("../../static/js/padded_widget");
 const pm_list = mock_esm("../../static/js/pm_list");
 const popovers = mock_esm("../../static/js/popovers");
 const resize = mock_esm("../../static/js/resize");
@@ -98,16 +98,6 @@ let presence_info;
 
 function test(label, f) {
     run_test(label, (helpers) => {
-        // Simulate a small window by having the
-        // fill_screen_with_content render the entire
-        // list in one pass.  We will do more refined
-        // testing in the buddy_list node tests.
-        helpers.override(buddy_list, "fill_screen_with_content", () => {
-            buddy_list.render_more({
-                chunk_size: 100,
-            });
-        });
-
         presence_info = new Map();
         presence.__Rewire__("presence_info", presence_info);
 
@@ -204,9 +194,7 @@ test("huddle_data.process_loaded_messages", () => {
     assert.deepEqual(huddle_data.get_huddles(), [user_ids_string2, user_ids_string1]);
 });
 
-test("presence_list_full_update", ({override, mock_template}) => {
-    override(padded_widget, "update_padding", () => {});
-
+test("presence_list_full_update", ({mock_template}) => {
     mock_template("user_presence_rows.hbs", false, (data) => {
         assert.equal(data.users.length, 7);
         assert.equal(data.users[0].user_id, me.user_id);
@@ -275,7 +263,6 @@ test("handlers", ({override, mock_template}) => {
         filter_key_handlers = opts.handlers;
     });
     override(scroll_util, "scroll_element_into_container", () => {});
-    override(padded_widget, "update_padding", () => {});
     override(popovers, "hide_all", () => {});
     override(popovers, "hide_all_except_sidebars", () => {});
     override(popovers, "show_userlist_sidebar", () => {});
@@ -406,13 +393,11 @@ test("first/prev/next", ({override, mock_template}) => {
         }
     });
 
-    override(padded_widget, "update_padding", () => {});
-
     assert.equal(buddy_list.first_key(), undefined);
     assert.equal(buddy_list.prev_key(alice.user_id), undefined);
     assert.equal(buddy_list.next_key(alice.user_id), undefined);
 
-    override(buddy_list.container, "append", () => {});
+    override(buddy_list, "insert_new_html", () => {});
 
     activity.redraw_user(alice.user_id);
     activity.redraw_user(fred.user_id);
@@ -445,7 +430,7 @@ test("insert_one_user_into_empty_list", ({override, mock_template}) => {
         return html;
     });
 
-    override(padded_widget, "update_padding", () => {});
+    // override(padded_widget, "update_padding", () => {});
 
     let appended_html;
     override(buddy_list.container, "append", (html) => {
@@ -464,7 +449,7 @@ test("insert_alice_then_fred", ({override, mock_template}) => {
     override(buddy_list.container, "append", (html) => {
         appended_html = html;
     });
-    override(padded_widget, "update_padding", () => {});
+    // override(padded_widget, "update_padding", () => {});
 
     activity.redraw_user(alice.user_id);
     assert.ok(appended_html.indexOf('data-user-id="1"') > 0);
@@ -482,7 +467,7 @@ test("insert_fred_then_alice_then_rename", ({override, mock_template}) => {
     override(buddy_list.container, "append", (html) => {
         appended_html = html;
     });
-    override(padded_widget, "update_padding", () => {});
+    // override(padded_widget, "update_padding", () => {});
 
     activity.redraw_user(fred.user_id);
     assert.ok(appended_html.indexOf('data-user-id="2"') > 0);
@@ -593,7 +578,6 @@ test("update_presence_info", ({override}) => {
 
 test("initialize", ({override, mock_template}) => {
     mock_template("user_presence_rows.hbs", false, () => {});
-    override(padded_widget, "update_padding", () => {});
     override(pm_list, "update_private_messages", () => {});
     override(watchdog, "check_for_unsuspend", () => {});
 
@@ -612,11 +596,6 @@ test("initialize", ({override, mock_template}) => {
 
     clear();
 
-    let scroll_handler_started;
-    buddy_list.start_scroll_handler = () => {
-        scroll_handler_started = true;
-    };
-
     activity.mark_client_idle();
 
     $(window).off("focus");
@@ -628,7 +607,6 @@ test("initialize", ({override, mock_template}) => {
     $(window).trigger("focus");
     clear();
 
-    assert.ok(scroll_handler_started);
     assert.ok(!activity.new_user_input);
     assert.ok(!$("#zephyr-mirror-error").hasClass("show"));
     assert.equal(activity.compute_active_status(), "active");

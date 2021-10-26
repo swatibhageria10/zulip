@@ -2,14 +2,16 @@ import $ from "jquery";
 
 import render_user_presence_row from "../templates/user_presence_row.hbs";
 import render_user_presence_rows from "../templates/user_presence_rows.hbs";
+import render_user_presence_sections from "../templates/user_presence_sections.hbs";
 
 import * as blueslip from "./blueslip";
 import * as buddy_data from "./buddy_data";
 import {$t} from "./i18n";
-// import * as message_viewport from "./message_viewport";
 import {localstorage} from "./localstorage";
+import * as message_viewport from "./message_viewport";
+import * as ui from "./ui";
 // import * as padded_widget from "./padded_widget";
-// import * as ui from "./ui";
+
 const ls = localstorage();
 
 class BuddyListConf {
@@ -17,36 +19,37 @@ class BuddyListConf {
     scroll_container_sel = "#buddy_list_wrapper";
     item_sel = "li.user_sidebar_entry";
     padding_sel = "#buddy_list_wrapper_padding";
+    users_section_sel = "#users";
+    others_section_sel = "#others";
 
-    items_to_html(opts) {
-        const user_info = opts.user_items;
-        let users_count = 0;
-        if (user_info) {
-            users_count = user_info.length;
-        }
-        const user_info_title = opts.user_items_title;
-        const other_info = opts.other_items;
-        let others_count;
-        if (other_info) {
-            others_count = other_info.length;
-            others_count = $t({defaultMessage: " ({others_count})"}, {others_count});
-        }
-        const other_info_title = opts.other_items_title;
+    sections_to_html(opts) {
         let users_title_collapsed = false;
         let others_title_collapsed = false;
         if (localstorage.supported()) {
             users_title_collapsed = Boolean(ls.get("users_title_collapsed"));
             others_title_collapsed = Boolean(ls.get("others_title_collapsed"));
         }
+        const html = render_user_presence_sections({
+            users_count: $t({defaultMessage: " ({users_count})"}, {users_count: opts.users_count}),
+            users_title: opts.user_items_title,
+            users_title_collapsed,
+            others_count: $t(
+                {defaultMessage: " ({others_count})"},
+                {others_count: opts.others_count},
+            ),
+            others_title: opts.other_items_title,
+            others_title_collapsed,
+        });
+        return html;
+    }
+
+    items_to_html(opts) {
+        // "users" here does not mean "users" like the rest of this file, it means
+        // users as in "person in buddy list" and includes what we call "others".
+        // todo: please rename.
+        const user_info = opts.items;
         const html = render_user_presence_rows({
             users: user_info,
-            users_count: $t({defaultMessage: " ({users_count})"}, {users_count}),
-            users_title: user_info_title,
-            users_title_collapsed,
-            others: other_info,
-            others_count,
-            others_title: other_info_title,
-            others_title_collapsed,
         });
         return html;
     }
@@ -77,15 +80,15 @@ class BuddyListConf {
 
     compare_function = buddy_data.compare_function;
 
-    // height_to_fill() {
-    //     // Because the buddy list gets sized dynamically, we err on the side
-    //     // of using the height of the entire viewport for deciding
-    //     // how much content to render.  Even on tall monitors this should
-    //     // still be a significant optimization for orgs with thousands of
-    //     // users.
-    //     const height = message_viewport.height();
-    //     return height;
-    // }
+    height_to_fill() {
+        // Because the buddy list gets sized dynamically, we err on the side
+        // of using the height of the entire viewport for deciding
+        // how much content to render.  Even on tall monitors this should
+        // still be a significant optimization for orgs with thousands of
+        // users.
+        const height = message_viewport.height();
+        return height;
+    }
 }
 
 export class BuddyList extends BuddyListConf {
@@ -93,7 +96,9 @@ export class BuddyList extends BuddyListConf {
     other_keys = [];
 
     populate(opts) {
-        this.render_count = 0;
+        this.is_all_user_list = false;
+        this.users_render_count = 0;
+        this.others_render_count = 0;
         this.container.html("");
 
         // We rely on our caller to give us items
@@ -101,91 +106,172 @@ export class BuddyList extends BuddyListConf {
         this.user_keys = opts.user_keys;
         this.other_keys = opts.other_keys;
 
-        if (this.user_keys.length === 0 && this.other_keys.length === 0) {
-            return;
-        }
-
-        let user_items;
-        const user_items_title = opts.user_keys_title;
-        if (this.user_keys.length > 0) {
-            user_items = this.get_data_from_keys({
-                keys: this.user_keys,
-            });
-        }
-
-        let other_items;
-        const other_items_title = opts.other_keys_title;
-        if (this.other_keys.length > 0) {
-            other_items = this.get_data_from_keys({
-                keys: this.other_keys,
-            });
-        }
-
-        const html = this.items_to_html({
-            user_items,
-            user_items_title,
-            other_items,
-            other_items_title,
+        const html = this.sections_to_html({
+            user_items_title: opts.user_keys_title,
+            users_count: opts.user_keys.length,
+            other_items_title: opts.other_keys_title,
+            others_count: opts.other_keys.length,
         });
 
         this.container = $(this.container_sel);
+
+        // todo: optimize append calls
+        // We should really avoid appending twice because of performance reasons, it might
+        // be as simple as passing the html we've made here to fill_screen_with_content and
+        // moving this append to the container, after fill_screen_with_content. Or maybe not?
         this.container.append(html);
 
         if (localstorage.supported()) {
-            $("#users")
+            $(this.users_section_sel)
                 .off("show")
                 .on("show", () => {
                     ls.set("users_title_collapsed", false);
                 });
-            $("#users")
+            $(this.users_section_sel)
                 .off("hide")
                 .on("hide", () => {
                     ls.set("users_title_collapsed", true);
                 });
-            $("#others")
+            $(this.others_section_sel)
                 .off("show")
                 .on("show", () => {
                     ls.set("others_title_collapsed", false);
                 });
-            $("#others")
+            $(this.others_section_sel)
                 .off("hide")
                 .on("hide", () => {
                     ls.set("others_title_collapsed", true);
                 });
         }
+        $(this.users_section_sel)
+            .off("shown")
+            .on("shown", () => {
+                // render elements if both sections were initialized as collapsed and this is the
+                // first to be un-collapsed
+                this.is_all_user_list = false;
+                this.fill_screen_with_content();
+            });
+        $(this.users_section_sel)
+            .off("hidden")
+            .on("hidden", () => {
+                // handles the case where we have the others section un-collapsed, but it has nothing
+                // rendered since the users section is taking up the full height of the view and we
+                // then collapse the users section.
+                this.is_all_user_list = false;
+                this.fill_screen_with_content();
+            });
+        $(this.others_section_sel)
+            .off("shown")
+            .on("shown", () => {
+                // render elements if both sections were initialized as collapsed and this is the
+                // first to be un-collapsed
+                this.is_all_user_list = false;
+                this.fill_screen_with_content();
+            });
+
+        // we're populating the all users list if there
+        // is no user title
+        this.is_all_user_list = !opts.user_keys_title;
+        this.fill_screen_with_content();
     }
 
-    // render_more(opts) {
-    //     const chunk_size = opts.chunk_size;
+    users_render_more(opts) {
+        const chunk_size = opts.chunk_size;
 
-    //     const begin = this.render_count;
-    //     const end = begin + chunk_size;
+        const begin = this.users_render_count;
+        const end = begin + chunk_size;
 
-    //     const more_keys = this.keys.slice(begin, end);
+        const more_keys = this.user_keys.slice(begin, end);
 
-    //     if (more_keys.length === 0) {
-    //         return;
-    //     }
+        if (more_keys.length === 0) {
+            return;
+        }
 
-    //     const items = this.get_data_from_keys({
-    //         keys: more_keys,
-    //     });
+        const items = this.get_data_from_keys({
+            keys: more_keys,
+        });
 
-    //     const html = this.items_to_html({
-    //         items,
-    //     });
-    //     this.container = $(this.container_sel);
-    //     this.container.append(html);
+        const html = this.items_to_html({
+            items,
+        });
 
-    //     // Invariant: more_keys.length >= items.length.
-    //     // (Usually they're the same, but occasionally keys
-    //     // won't return valid items.  Even though we don't
-    //     // actually render these keys, we still "count" them
-    //     // as rendered.
+        this.users_section = $(this.users_section_sel);
+        this.users_section.append(html);
 
-    //     this.render_count += more_keys.length;
-    //     this.update_padding();
-    // }
+        // Invariant: more_keys.length >= items.length.
+        // (Usually they're the same, but occasionally keys
+        // won't return valid items.  Even though we don't
+        // actually render these keys, we still "count" them
+        // as rendered.
+
+        this.users_render_count += more_keys.length;
+        this.update_padding();
+    }
+
+    others_render_more(opts) {
+        const chunk_size = opts.chunk_size;
+
+        const begin = this.others_render_count;
+        const end = begin + chunk_size;
+
+        const more_keys = this.other_keys.slice(begin, end);
+
+        if (more_keys.length === 0) {
+            return;
+        }
+
+        const items = this.get_data_from_keys({
+            keys: more_keys,
+        });
+
+        const html = this.items_to_html({
+            items,
+        });
+
+        this.others_section = $(this.others_section_sel);
+        this.others_section.append(html);
+
+        // Invariant: more_keys.length >= items.length.
+        // (Usually they're the same, but occasionally keys
+        // won't return valid items.  Even though we don't
+        // actually render these keys, we still "count" them
+        // as rendered.
+
+        this.others_render_count += more_keys.length;
+        this.update_padding();
+    }
+
+    all_users_render_more(opts) {
+        const chunk_size = opts.chunk_size;
+
+        const begin = this.users_render_count;
+        const end = begin + chunk_size;
+
+        const more_keys = this.user_keys.slice(begin, end);
+
+        if (more_keys.length === 0) {
+            return;
+        }
+
+        const items = this.get_data_from_keys({
+            keys: more_keys,
+        });
+
+        const html = this.items_to_html({
+            items,
+        });
+        this.container = $(this.container_sel);
+        this.container.append(html);
+
+        // Invariant: more_keys.length >= items.length.
+        // (Usually they're the same, but occasionally keys
+        // won't return valid items.  Even though we don't
+        // actually render these keys, we still "count" them
+        // as rendered.
+
+        this.users_render_count += more_keys.length;
+        this.update_padding();
+    }
 
     get_items() {
         const obj = this.container.find(`${this.item_sel}`);
@@ -251,23 +337,6 @@ export class BuddyList extends BuddyListConf {
     maybe_remove_key(opts) {
         this.maybe_remove_user_key(opts);
         this.maybe_remove_other_key(opts);
-
-        // if (pos < this.render_count) {
-        // this.render_count -= 1;
-        const li = this.find_li({key: opts.key});
-
-        // this conditional is a HACK which we need solely because of zjquery:
-        // (1) zjquery returns an array if we set the results of ".find()" to
-        // "false", arrays do not have ".remove()". Actual jquery returns a
-        // jquery element, which we could call ".remove()" on, which would
-        // just do nothing (which is correct).
-        // (2) zjquery doesn't support ".remove()" anyway.
-
-        if (li.length !== 0) {
-            li.remove();
-        }
-        // this.update_padding();
-        // }
     }
 
     maybe_remove_user_key(opts) {
@@ -278,6 +347,23 @@ export class BuddyList extends BuddyListConf {
         }
 
         this.user_keys.splice(pos, 1);
+
+        if (pos < this.users_render_count) {
+            this.users_render_count -= 1;
+            const li = this.find_li({key: opts.key});
+
+            // this conditional is a HACK which we need solely because of zjquery:
+            // (1) zjquery returns an array if we set the results of ".find()" to
+            // "false", arrays do not have ".remove()". Actual jquery returns a
+            // jquery element, which we could call ".remove()" on, which would
+            // just do nothing (which is correct).
+            // (2) zjquery doesn't support ".remove()" anyway.
+
+            if (li.length !== 0) {
+                li.remove();
+            }
+            this.update_padding();
+        }
     }
 
     maybe_remove_other_key(opts) {
@@ -288,6 +374,23 @@ export class BuddyList extends BuddyListConf {
         }
 
         this.other_keys.splice(pos, 1);
+
+        if (pos < this.others_render_count) {
+            this.others_render_count -= 1;
+            const li = this.find_li({key: opts.key});
+
+            // this conditional is a HACK which we need solely because of zjquery:
+            // (1) zjquery returns an array if we set the results of ".find()" to
+            // "false", arrays do not have ".remove()". Actual jquery returns a
+            // jquery element, which we could call ".remove()" on, which would
+            // just do nothing (which is correct).
+            // (2) zjquery doesn't support ".remove()" anyway.
+
+            if (li.length !== 0) {
+                li.remove();
+            }
+            this.update_padding();
+        }
     }
 
     find_user_position(opts) {
@@ -319,55 +422,77 @@ export class BuddyList extends BuddyListConf {
         return this.other_keys.length;
     }
 
-    // force_render(opts) {
-    //     const pos = opts.pos;
+    force_render_users(opts) {
+        const pos = opts.pos;
 
-    //     // Try to render a bit optimistically here.
-    //     const cushion_size = 3;
-    //     const chunk_size = pos + cushion_size - this.render_count;
+        // Try to render a bit optimistically here.
+        const cushion_size = 3;
+        const chunk_size = pos + cushion_size - this.users_render_count;
 
-    //     if (chunk_size <= 0) {
-    //         blueslip.error("cannot show key at this position: " + pos);
-    //     }
+        if (chunk_size <= 0) {
+            blueslip.error("cannot show key at this position: " + pos);
+        }
 
-    //     this.render_more({
-    //         chunk_size,
-    //     });
-    // }
+        this.users_render_more({
+            chunk_size,
+        });
+    }
+
+    force_render_others(opts) {
+        const pos = opts.pos;
+
+        // Try to render a bit optimistically here.
+        const cushion_size = 3;
+        const chunk_size = pos + cushion_size - this.others_render_count;
+
+        if (chunk_size <= 0) {
+            blueslip.error("cannot show key at this position: " + pos);
+        }
+
+        this.others_render_more({
+            chunk_size,
+        });
+    }
 
     find_li(opts) {
         const key = opts.key;
 
         // Try direct DOM lookup first for speed.
-        const li = this.get_li_from_key({
+        let li = this.get_li_from_key({
             key,
         });
 
-        // if (li.length === 1) {
-        //     return li;
-        // }
+        if (li.length === 1) {
+            return li;
+        }
 
-        // if (!opts.force_render) {
-        //     // Most callers don't force us to render a list
-        //     // item that wouldn't be on-screen anyway.
-        //     return li;
-        // }
+        if (!opts.force_render) {
+            // Most callers don't force us to render a list
+            // item that wouldn't be on-screen anyway.
+            return li;
+        }
 
-        // const pos = this.user_keys.indexOf(key);
+        let pos = this.user_keys.indexOf(key);
 
-        // if (pos < 0) {
-        //     // TODO: See ListCursor.get_row() for why this is
-        //     //       a bit janky now.
-        //     return [];
-        // }
+        if (pos < 0) {
+            pos = this.other_keys.indexOf(key);
+            if (pos < 0) {
+                // TODO: See ListCursor.get_row() for why this is
+                //       a bit janky now.
+                return [];
+            }
+            this.force_render_others({
+                pos,
+            });
+        } else {
+            this.force_render_users({
+                pos,
+            });
+        }
 
-        // this.force_render({
-        //     pos,
-        // });
-
-        // li = this.get_li_from_key({
-        //     key,
-        // });
+        li = this.get_li_from_key({
+            key,
+        });
 
         return li;
     }
@@ -375,45 +500,45 @@ export class BuddyList extends BuddyListConf {
     insert_new_html_for_user(opts) {
         const new_key = opts.new_key;
         const html = opts.html;
-        // const pos = opts.pos;
+        const pos = opts.pos;
 
         if (new_key === undefined) {
-            //     if (pos === this.render_count) {
-            //         this.render_count += 1;
-            this.users_section.append(html);
-            // this.update_padding();
-            //     }
+            if (pos === this.users_render_count) {
+                this.users_render_count += 1;
+                this.users_section.append(html);
+                this.update_padding();
+            }
             return;
         }
 
-        // if (pos < this.render_count) {
-        //     this.render_count += 1;
-        const li = this.find_li({key: new_key});
-        li.before(html);
-        // this.update_padding();
-        // }
+        if (pos < this.users_render_count) {
+            this.users_render_count += 1;
+            const li = this.find_li({key: new_key});
+            li.before(html);
+            this.update_padding();
+        }
     }
 
     insert_new_html_for_other(opts) {
         const new_key = opts.new_key;
         const html = opts.html;
-        // const pos = opts.pos;
+        const pos = opts.pos;
 
         if (new_key === undefined) {
-            //     if (pos === this.render_count) {
-            //         this.render_count += 1;
-            this.others_section.append(html);
-            // this.update_padding();
-            //     }
+            if (pos === this.others_render_count) {
+                this.others_render_count += 1;
+                this.others_section.append(html);
+                this.update_padding();
+            }
             return;
         }
 
-        // if (pos < this.render_count) {
-        //     this.render_count += 1;
-        const li = this.find_li({key: new_key});
-        li.before(html);
-        // this.update_padding();
-        // }
+        if (pos < this.others_render_count) {
+            this.others_render_count += 1;
+            const li = this.find_li({key: new_key});
+            li.before(html);
+            this.update_padding();
+        }
     }
 
     insert_or_move(opts) {
@@ -482,55 +607,108 @@ export class BuddyList extends BuddyListConf {
         });
     }
 
-    // fill_screen_with_content() {
-    //     let height = this.height_to_fill();
+    fill_screen_with_content() {
+        let height = this.height_to_fill();
 
-    //     const elem = ui.get_scroll_element($(this.scroll_container_sel)).expectOne()[0];
+        const elem = ui.get_scroll_element($(this.scroll_container_sel)).expectOne()[0];
 
-    //     // Add a fudge factor.
-    //     height += 10;
+        // Add a fudge factor.
+        height += 10;
 
-    //     while (this.render_count < this.keys.length) {
-    //         const padding_height = $(this.padding_sel).height();
-    //         const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
+        if (this.is_all_user_list) {
+            while (this.users_render_count < this.user_keys.length) {
+                // const padding_height = $(this.padding_sel).height();
+                // const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
+                const bottom_offset = elem.scrollHeight - elem.scrollTop;
 
-    //         if (bottom_offset > height) {
-    //             break;
-    //         }
+                if (bottom_offset > height) {
+                    break;
+                }
 
-    //         const chunk_size = 20;
+                const chunk_size = 20;
 
-    //         this.render_more({
-    //             chunk_size,
-    //         });
-    //     }
-    // }
+                this.all_users_render_more({
+                    chunk_size,
+                });
+            }
+        } else {
+            const chunk_size = 20;
+            const is_users_title_collapsed = ls.get("users_title_collapsed");
+            const is_others_title_collapsed = ls.get("others_title_collapsed");
+            if (is_users_title_collapsed && this.users_render_count === 0) {
+                // render at least 1 user so that show and shown can trigger properly
+                this.users_render_more({
+                    chunk_size: 1,
+                });
+            }
+            while (!is_users_title_collapsed && this.users_render_count < this.user_keys.length) {
+                // const padding_height = $(this.padding_sel).height();
+                // const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
+
+                // we're using a user_section_elem instead of the scroll elem to handle the case where
+                // we have the users section collapsed, and the others section un-collapsed and taking
+                //  up the full height of the view and we then un-collapse the users section.
+                const user_section_elem = $(this.users_section_sel)[0];
+                const bottom_offset = user_section_elem.scrollHeight - elem.scrollTop;
+                if (bottom_offset > height) {
+                    break;
+                }
+
+                this.users_render_more({
+                    chunk_size,
+                });
+            }
+            if (is_others_title_collapsed && this.others_render_count === 0) {
+                // render at least 1 other so that show and shown can trigger properly
+                this.others_render_more({
+                    chunk_size: 1,
+                });
+            }
+            if (this.users_render_count >= this.user_keys.length || is_users_title_collapsed) {
+                while (
+                    !is_others_title_collapsed &&
+                    this.others_render_count < this.other_keys.length
+                ) {
+                    // const padding_height = $(this.padding_sel).height();
+                    // const bottom_offset = elem.scrollHeight - elem.scrollTop - padding_height;
+                    const bottom_offset = elem.scrollHeight - elem.scrollTop;
+
+                    if (bottom_offset > height) {
+                        break;
+                    }
+
+                    this.others_render_more({
+                        chunk_size,
+                    });
+                }
+            }
+        }
+    }
 
     // This is a bit of a hack to make sure we at least have
     // an empty list to start, before we get the initial payload.
     container = $(this.container_sel);
-    users_section = $("#users");
+    users_section = $(this.users_section_sel);
+    others_section = $(this.others_section_sel);
 
-    others_section = $("#others");
+    start_scroll_handler() {
+        // We have our caller explicitly call this to make
+        // sure everything's in place.
+        const scroll_container = ui.get_scroll_element($(this.scroll_container_sel));
 
-    // start_scroll_handler() {
-    //     // We have our caller explicitly call this to make
-    //     // sure everything's in place.
-    //     const scroll_container = ui.get_scroll_element($(this.scroll_container_sel));
+        scroll_container.on("scroll", () => {
+            this.fill_screen_with_content();
+        });
+    }
 
-    //     scroll_container.on("scroll", () => {
-    //         this.fill_screen_with_content();
-    //     });
-    // }
-
-    // update_padding() {
-    //     padded_widget.update_padding({
-    //         shown_rows: this.render_count,
-    //         total_rows: this.keys.length,
-    //         content_sel: this.container_sel,
-    //         padding_sel: this.padding_sel,
-    //     });
-    // }
+    update_padding() {
+        // padded_widget.update_padding({
+        //     shown_rows: this.users_render_count,
+        //     total_rows: this.user_keys.length,
+        //     content_sel: this.container_sel,
+        //     padding_sel: this.padding_sel,
+        // });
+    }
 }
 
 export const buddy_list = new BuddyList();

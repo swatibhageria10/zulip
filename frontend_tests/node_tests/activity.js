@@ -115,6 +115,18 @@ let presence_info;
 
 function test(label, f) {
     run_test(label, (helpers) => {
+        // Simulate a small window by having the
+        // fill_screen_with_content render the entire
+        // list in one pass. We will do more refined
+        // testing in the buddy_list node tests.
+        helpers.override(buddy_list, "fill_screen_with_content", () => {
+            buddy_list.all_users_render_more({
+                chunk_size: 100,
+            });
+        });
+
+        helpers.mock_template("user_presence_sections.hbs", false, () => "html-stub");
+
         presence_info = new Map();
         presence.__Rewire__("presence_info", presence_info);
 
@@ -212,6 +224,15 @@ test("huddle_data.process_loaded_messages", () => {
 });
 
 test("presence_list_full_update", ({override, mock_template}) => {
+    // override(padded_widget, "update_padding", () => {});
+
+    mock_template("user_presence_sections.hbs", false, (data) => {
+        assert.equal(data.users_title, "translated: Recipients");
+        assert.equal(data.users_count, "translated:  (2)");
+        assert.equal(data.others_title, "translated: Others");
+        assert.equal(data.others_count, "translated:  (5)");
+    });
+
     mock_template("user_presence_rows.hbs", false, (data) => {
         assert.equal(data.users.length, 2);
         assert.equal(data.users[0].user_id, me.user_id);
@@ -279,6 +300,7 @@ test("handlers", ({override, mock_template}) => {
         filter_key_handlers = opts.handlers;
     });
     // override(scroll_util, "scroll_element_into_container", () => {});
+    // override(padded_widget, "update_padding", () => {});
     override(popovers, "hide_all", () => {});
     override(popovers, "hide_all_except_sidebars", () => {});
     override(popovers, "show_userlist_sidebar", () => {});
@@ -729,6 +751,7 @@ test("update_presence_info", ({override}) => {
 
     presence.presence_info.delete(me.user_id);
     activity.update_presence_info(me.user_id, info, server_time);
+    // assert.ok(inserted);
     assert.deepEqual(presence.presence_info.get(me.user_id).status, "active");
 
     presence.presence_info.delete(alice.user_id);
@@ -741,6 +764,7 @@ test("update_presence_info", ({override}) => {
 
 test("initialize", ({override, mock_template}) => {
     mock_template("user_presence_rows.hbs", false, () => {});
+    // override(padded_widget, "update_padding", () => {});
     override(pm_list, "update_private_messages", () => {});
     override(watchdog, "check_for_unsuspend", () => {});
 
@@ -763,6 +787,11 @@ test("initialize", ({override, mock_template}) => {
 
     clear();
 
+    let scroll_handler_started;
+    buddy_list.start_scroll_handler = () => {
+        scroll_handler_started = true;
+    };
+
     activity.mark_client_idle();
 
     $(window).off("focus");
@@ -774,6 +803,7 @@ test("initialize", ({override, mock_template}) => {
     $(window).trigger("focus");
     clear();
 
+    assert.ok(scroll_handler_started);
     assert.ok(!activity.new_user_input);
     assert.ok(!$("#zephyr-mirror-error").hasClass("show"));
     assert.equal(activity.compute_active_status(), "active");

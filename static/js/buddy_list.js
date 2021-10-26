@@ -5,6 +5,7 @@ import render_user_presence_rows from "../templates/user_presence_rows.hbs";
 
 import * as blueslip from "./blueslip";
 import * as buddy_data from "./buddy_data";
+import {$t} from "./i18n";
 // import * as message_viewport from "./message_viewport";
 import {localstorage} from "./localstorage";
 // import * as padded_widget from "./padded_widget";
@@ -19,8 +20,17 @@ class BuddyListConf {
 
     items_to_html(opts) {
         const user_info = opts.user_items;
+        let users_count = 0;
+        if (user_info) {
+            users_count = user_info.length;
+        }
         const user_info_title = opts.user_items_title;
         const other_info = opts.other_items;
+        let others_count;
+        if (other_info) {
+            others_count = other_info.length;
+            others_count = $t({defaultMessage: " ({others_count})"}, {others_count});
+        }
         const other_info_title = opts.other_items_title;
         let users_title_collapsed = false;
         let others_title_collapsed = false;
@@ -30,9 +40,11 @@ class BuddyListConf {
         }
         const html = render_user_presence_rows({
             users: user_info,
+            users_count: $t({defaultMessage: " ({users_count})"}, {users_count}),
             users_title: user_info_title,
             users_title_collapsed,
             others: other_info,
+            others_count,
             others_title: other_info_title,
             others_title_collapsed,
         });

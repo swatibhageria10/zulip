@@ -59,8 +59,8 @@ run_test("basics", ({override}) => {
     });
 
     override(buddy_list, "items_to_html", (opts) => {
-        const items = opts.items;
-        assert.equal(items, "data-stub");
+        const user_items = opts.user_items;
+        assert.equal(user_items, "data-stub");
         return "html-stub";
     });
 
@@ -71,7 +71,7 @@ run_test("basics", ({override}) => {
     };
 
     buddy_list.populate({
-        keys: [alice.user_id],
+        user_keys: [alice.user_id],
     });
     assert.ok(appended);
 
@@ -126,7 +126,7 @@ run_test("find_li w/force_render", ({override}) => {
         return stub_li;
     });
 
-    buddy_list.keys = ["foo", "bar", key, "baz"];
+    buddy_list.user_keys = ["foo", "bar", key, "baz"];
 
     let shown;
 

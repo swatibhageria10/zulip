@@ -16,7 +16,7 @@ class BuddyListConf {
     padding_sel = "#buddy_list_wrapper_padding";
 
     items_to_html(opts) {
-        const user_info = opts.items;
+        const user_info = opts.user_items;
         const html = render_user_presence_rows({
             users: user_info,
         });
@@ -58,7 +58,7 @@ class BuddyListConf {
 }
 
 export class BuddyList extends BuddyListConf {
-    keys = [];
+    user_keys = [];
 
     populate(opts) {
         this.render_count = 0;
@@ -66,18 +66,18 @@ export class BuddyList extends BuddyListConf {
 
         // We rely on our caller to give us items
         // in already-sorted order.
-        this.keys = opts.keys;
+        this.user_keys = opts.user_keys;
 
-        if (this.keys.length === 0) {
+        if (this.user_keys.length === 0) {
             return;
         }
 
-        const items = this.get_data_from_keys({
-            keys: this.keys,
+        const user_items = this.get_data_from_keys({
+            keys: this.user_keys,
         });
 
         const html = this.items_to_html({
-            items,
+            user_items,
         });
 
         this.container = $(this.container_sel);
@@ -121,38 +121,38 @@ export class BuddyList extends BuddyListConf {
         return obj.map((i, elem) => $(elem));
     }
 
-    first_key() {
-        return this.keys[0];
+    first_user_key() {
+        return this.user_keys[0];
     }
 
     prev_key(key) {
-        const i = this.keys.indexOf(key);
+        const i = this.user_keys.indexOf(key);
 
         if (i <= 0) {
             return undefined;
         }
 
-        return this.keys[i - 1];
+        return this.user_keys[i - 1];
     }
 
     next_key(key) {
-        const i = this.keys.indexOf(key);
+        const i = this.user_keys.indexOf(key);
 
         if (i < 0) {
             return undefined;
         }
 
-        return this.keys[i + 1];
+        return this.user_keys[i + 1];
     }
 
     maybe_remove_key(opts) {
-        const pos = this.keys.indexOf(opts.key);
+        const pos = this.user_keys.indexOf(opts.key);
 
         if (pos < 0) {
             return;
         }
 
-        this.keys.splice(pos, 1);
+        this.user_keys.splice(pos, 1);
 
         // if (pos < this.render_count) {
         // this.render_count -= 1;
@@ -166,15 +166,15 @@ export class BuddyList extends BuddyListConf {
         const key = opts.key;
         let i;
 
-        for (i = 0; i < this.keys.length; i += 1) {
-            const list_key = this.keys[i];
+        for (i = 0; i < this.user_keys.length; i += 1) {
+            const list_key = this.user_keys[i];
 
             if (this.compare_function(key, list_key) < 0) {
                 return i;
             }
         }
 
-        return this.keys.length;
+        return this.user_keys.length;
     }
 
     // force_render(opts) {
@@ -211,7 +211,7 @@ export class BuddyList extends BuddyListConf {
         //     return li;
         // }
 
-        // const pos = this.keys.indexOf(key);
+        // const pos = this.user_keys.indexOf(key);
 
         // if (pos < 0) {
         //     // TODO: See ListCursor.get_row() for why this is
@@ -265,9 +265,9 @@ export class BuddyList extends BuddyListConf {
         // Order is important here--get the new_key
         // before mutating our list.  An undefined value
         // corresponds to appending.
-        const new_key = this.keys[pos];
+        const new_key = this.user_keys[pos];
 
-        this.keys.splice(pos, 0, key);
+        this.user_keys.splice(pos, 0, key);
 
         const html = this.item_to_html({item});
         this.insert_new_html({

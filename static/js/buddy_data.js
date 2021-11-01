@@ -1,10 +1,15 @@
+import _ from "lodash";
+
 import * as blueslip from "./blueslip";
+import * as compose_state from "./compose_state";
 import * as hash_util from "./hash_util";
 import {$t} from "./i18n";
 import * as muted_users from "./muted_users";
+import * as narrow_state from "./narrow_state";
 import {page_params} from "./page_params";
 import * as people from "./people";
 import * as presence from "./presence";
+import * as stream_data from "./stream_data";
 import * as timerender from "./timerender";
 import * as unread from "./unread";
 import * as user_status from "./user_status";
@@ -339,7 +344,7 @@ function filter_user_ids(user_filter_text, user_ids) {
     return Array.from(user_id_dict.keys());
 }
 
-function get_filtered_user_id_list(user_filter_text) {
+function get_filtered_all_user_id_list(user_filter_text) {
     let base_user_id_list;
 
     if (user_filter_text) {
@@ -363,11 +368,194 @@ function get_filtered_user_id_list(user_filter_text) {
     return user_ids;
 }
 
-export function get_filtered_and_sorted_user_ids(user_filter_text) {
-    let user_ids;
-    user_ids = get_filtered_user_id_list(user_filter_text);
+function get_user_id_list_and_title_for_narrow_state(user_filter_text) {
+    const filter = narrow_state.filter();
+    if (!filter) {
+        return {user_ids: get_filtered_all_user_id_list(user_filter_text)};
+    }
+
+    // show separate lists for stream or topic narrows and pm thread narrow
+    if (narrow_state.stream()) {
+        return {
+            user_ids: get_stream_message_recipients_list(narrow_state.stream_sub().stream_id),
+            user_title: $t({defaultMessage: "Subscribers"}),
+        };
+    } else if (filter.has_operator("pm-with")) {
+        return {
+            user_ids: get_pm_recipients_list(filter.operands("pm-with")[0].split(",")),
+            user_title: $t({defaultMessage: "Recipients"}),
+        };
+    }
+
+    // show all users list
+    return {user_ids: get_filtered_all_user_id_list(user_filter_text)};
+}
+
+function get_user_id_list_and_title_for_private_message(private_message_recipient) {
+    return {
+        user_ids: get_pm_recipients_list(private_message_recipient.split(",")),
+        user_title: $t({defaultMessage: "Recipients"}),
+    };
+}
+
+function get_user_id_list_and_title_for_stream_message(stream_name) {
+    const stream = stream_data.get_sub_by_name(stream_name);
+    let user_ids = [];
+    if (stream) {
+        user_ids = get_stream_message_recipients_list(stream.stream_id);
+    }
+    return {
+        user_ids,
+        user_title: $t({defaultMessage: "Recipients"}),
+    };
+}
+
+function get_pm_recipients_list(user_emails) {
+    const user_ids = _.reduce(
+        user_emails,
+        (list, user_email) => {
+            if (people.is_valid_email_for_compose(user_email)) {
+                const user_id = people.get_user_id(user_email);
+                const person = people.get_by_user_id(user_id);
+                // if the user is bot, do not show in right sidebar.
+                if (person && !person.is_bot) {
+                    list.push(user_id);
+                }
+                return list;
+            }
+            return list;
+        },
+        [],
+    );
+
+    // Add current user to buddy list
+    const me = people.my_current_user_id();
+    if (!_.includes(user_ids, me)) {
+        user_ids.push(me);
+    }
+
+    return user_ids;
+}
+
+function get_stream_message_recipients_list(stream_id) {
+    let user_ids = people.get_active_user_ids();
+    user_ids = _.filter(user_ids, (user_id) => {
+        const person = people.get_by_user_id(user_id);
+        if (
+            person && // if the user is bot, do not show in right sidebar.
+            person.is_bot
+        ) {
+            return false;
+        }
+        if (stream_id && !stream_data.is_user_subscribed(stream_id, person.user_id)) {
+            return false;
+        }
+        return true;
+    });
+    return user_ids;
+}
+
+export function get_filtered_and_sorted_user_ids_and_title(user_filter_text) {
+    let users = get_user_id_list_and_title_for_narrow_state(user_filter_text);
+    if (compose_state.composing()) {
+        const stream_name = compose_state.stream_name();
+        if (stream_name && !(stream_name === narrow_state.stream())) {
+            users = get_user_id_list_and_title_for_stream_message(stream_name);
+        }
+
+        const private_message_recipient = compose_state.private_message_recipient();
+        if (
+            private_message_recipient &&
+            !(private_message_recipient === narrow_state.pm_email_string())
+        ) {
+            users = get_user_id_list_and_title_for_private_message(private_message_recipient);
+        }
+    }
+    let user_ids = filter_user_ids(user_filter_text, users.user_ids);
     user_ids = maybe_shrink_list(user_ids, user_filter_text);
-    return sort_users(user_ids);
+    return {user_ids: sort_users(user_ids), user_title: users.user_title};
+}
+
+function get_filtered_and_sorted_other_ids_and_title(user_filter_text, user_ids) {
+    const all_user_ids = get_filtered_all_user_id_list(user_filter_text);
+    let other_ids = all_user_ids.filter(
+        (potential_other_id) => !user_ids.includes(potential_other_id),
+    );
+    other_ids = maybe_shrink_list(other_ids, user_filter_text);
+    let other_title;
+    if (other_ids.length) {
+        other_title = $t({defaultMessage: "Others"});
+    }
+    return {other_ids: sort_users(other_ids), other_title};
+}
+
+export function get_filtered_and_sorted_key_groups_and_titles(user_filter_text) {
+    const users = get_filtered_and_sorted_user_ids_and_title(user_filter_text);
+    const others = get_filtered_and_sorted_other_ids_and_title(user_filter_text, users.user_ids);
+    const key_groups_and_titles = {
+        user_keys: users.user_ids,
+        user_keys_title: users.user_title,
+        other_keys: others.other_ids,
+        other_keys_title: others.other_title,
+    };
+    return key_groups_and_titles;
+}
+
+export function does_belong_to_users_or_others_section(user_id) {
+    if (compose_state.composing()) {
+        const stream_name = compose_state.stream_name();
+        if (stream_name) {
+            const is_subscriber = stream_data
+                .get_subscribed_streams_for_user(user_id)
+                .map((stream) => stream.name.toLowerCase())
+                .includes(stream_name.toLowerCase());
+            if (is_subscriber) {
+                return "users";
+            }
+            return "others";
+        }
+        const private_message_recipient = compose_state.private_message_recipient();
+        if (private_message_recipient) {
+            const is_recipient = private_message_recipient
+                .split(",")
+                .includes(people.get_by_user_id(user_id).email);
+            if (is_recipient) {
+                return "users";
+            }
+            return "others";
+        }
+        blueslip.error("compose_state composing but not stream or private_message");
+        return "users";
+    }
+
+    const filter = narrow_state.filter();
+    if (!filter) {
+        return "users";
+    }
+
+    // show separate lists for stream or topic narrows and pm thread narrow
+    if (narrow_state.stream()) {
+        const stream_name = narrow_state.stream_sub().name;
+        const is_subscriber = stream_data
+            .get_subscribed_streams_for_user(user_id)
+            .map((stream) => stream.name)
+            .includes(stream_name);
+        if (is_subscriber) {
+            return "users";
+        }
+        return "others";
+    } else if (filter.has_operator("pm-with")) {
+        const is_recipient = filter
+            .operands("pm-with")[0]
+            .split(",")
+            .includes(people.get_by_user_id(user_id).email);
+        if (is_recipient) {
+            return "users";
+        }
+        return "others";
+    }
+
+    return "users";
 }
 
 export function matches_filter(user_filter_text, user_id) {

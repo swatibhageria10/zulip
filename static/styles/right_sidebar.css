@@ -12,7 +12,6 @@
 
 #user_presences {
     max-width: 95%;
-    overflow-x: hidden;
     list-style-position: inside; /* Draw the bullets inside our box */
 
     li {
@@ -83,6 +82,28 @@
     a {
         color: inherit;
         margin-left: 0;
+    }
+
+    .buddy_list_heading {
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        margin: 5px;
+        background-color: hsl(0, 0%, 100%);
+        line-height: 1;
+        position: sticky;
+        top: 0;
+        z-index: 1;
+    }
+
+    .fa-chevron-down {
+        margin: 0 5px 2px 1.25px;
+        font-size: 8px;
+        transition: transform 200ms ease-in-out;
+    }
+
+    .collapsed .fa-chevron-down {
+        transform: rotate(-90deg);
     }
 }
 

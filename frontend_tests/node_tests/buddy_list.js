@@ -2,34 +2,55 @@
 
 const {strict: assert} = require("assert");
 
-const {zrequire} = require("../zjsunit/namespace");
+const {zrequire, set_global} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 // const blueslip = require("../zjsunit/zblueslip");
 const $ = require("../zjsunit/zjquery");
 
+const ls_container = new Map();
+set_global("localStorage", {
+    getItem(key) {
+        return ls_container.get(key);
+    },
+    setItem(key, val) {
+        ls_container.set(key, val);
+    },
+    removeItem(key) {
+        ls_container.delete(key);
+    },
+    clear() {
+        ls_container.clear();
+    },
+});
+
 const people = zrequire("people");
 const {BuddyList} = zrequire("buddy_list");
+// function init_simulated_scrolling() {
+//     const elem = {
+//         dataset: {},
+//         scrollTop: 0,
+//         scrollHeight: 0,
+//     };
 
-function init_simulated_scrolling() {
-    const elem = {
-        dataset: {},
-        scrollTop: 0,
-        scrollHeight: 0,
-    };
+//     $.create("#buddy_list_wrapper", {children: [elem]});
 
-    $.create("#buddy_list_wrapper", {children: [elem]});
+//     $("#buddy_list_wrapper_padding").set_height(0);
 
-    $("#buddy_list_wrapper_padding").set_height(0);
-
-    return elem;
-}
+//     return elem;
+// }
 
 const alice = {
     email: "alice@zulip.com",
     user_id: 10,
     full_name: "Alice Smith",
 };
-people.add_active_user(alice);
+
+const bob = {
+    email: "bob@zulip.com",
+    user_id: 11,
+    full_name: "bob Smith",
+};
+people.add_active_user(bob);
 
 run_test("get_items", () => {
     const buddy_list = new BuddyList();
@@ -50,17 +71,15 @@ run_test("get_items", () => {
 
 run_test("basics", ({override}) => {
     const buddy_list = new BuddyList();
-    init_simulated_scrolling();
+    // init_simulated_scrolling();
 
-    override(buddy_list, "get_data_from_keys", (opts) => {
-        const keys = opts.keys;
-        assert.deepEqual(keys, [alice.user_id]);
-        return "data-stub";
-    });
+    override(buddy_list, "get_data_from_keys", () => "data-stub");
 
     override(buddy_list, "items_to_html", (opts) => {
         const user_items = opts.user_items;
+        const other_items = opts.other_items;
         assert.equal(user_items, "data-stub");
+        assert.equal(other_items, "data-stub");
         return "html-stub";
     });
 
@@ -72,6 +91,7 @@ run_test("basics", ({override}) => {
 
     buddy_list.populate({
         user_keys: [alice.user_id],
+        other_keys: [bob.user_id],
     });
     assert.ok(appended);
 
@@ -160,4 +180,38 @@ run_test("find_li w/bad key", ({override}) => {
     });
 
     assert.deepEqual(undefined_li, {length: 0});
+});
+
+run_test("two section layout collapse persistence", ({mock_template}) => {
+    people.add_active_user(alice);
+    const buddy_list = new BuddyList();
+    mock_template("user_presence_rows.hbs", false, (args) => {
+        assert.equal(args.users_title_collapsed, false);
+        assert.equal(args.others_title_collapsed, false);
+    });
+    buddy_list.populate({
+        user_keys: [alice.user_id],
+        other_keys: [bob.user_id],
+    });
+    $("#users").get_on_handler("hide")();
+    $("#others").get_on_handler("hide")();
+    mock_template("user_presence_rows.hbs", false, (args) => {
+        assert.equal(args.users_title_collapsed, true);
+        assert.equal(args.others_title_collapsed, true);
+    });
+    buddy_list.populate({
+        user_keys: [alice.user_id],
+        other_keys: [bob.user_id],
+    });
+
+    $("#users").get_on_handler("show")();
+    $("#others").get_on_handler("show")();
+    mock_template("user_presence_rows.hbs", false, (args) => {
+        assert.equal(args.users_title_collapsed, false);
+        assert.equal(args.others_title_collapsed, false);
+    });
+    buddy_list.populate({
+        user_keys: [alice.user_id],
+        other_keys: [bob.user_id],
+    });
 });

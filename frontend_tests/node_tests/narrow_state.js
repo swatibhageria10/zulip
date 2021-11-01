@@ -313,3 +313,8 @@ test("pm_string", () => {
     set_filter([["pm-with", "bob@foo.com,alice@foo.com"]]);
     assert.equal(narrow_state.pm_string(), "444,555");
 });
+
+test("pm_email_string", () => {
+    set_filter([["stream", "Foo"]]);
+    assert.equal(narrow_state.pm_email_string(), undefined);
+});

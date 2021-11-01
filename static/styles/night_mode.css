@@ -80,6 +80,7 @@ body.night-mode {
     .app-main,
     .header-main,
     #message_view_header_underpadding,
+    #user_presences .buddy_list_heading,
     .floating_recipient .message-header-wrapper,
     .column-middle,
     #compose,

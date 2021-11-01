@@ -12,6 +12,7 @@ set_global("document", {
     to_$: () => $("document-stub"),
 });
 
+const activity = mock_esm("../../static/js/activity");
 const channel = mock_esm("../../static/js/channel");
 const compose_fade = mock_esm("../../static/js/compose_fade", {
     clear_compose: noop,
@@ -223,6 +224,7 @@ test("start", ({override}) => {
 
     $("#compose-textarea").set_height(50);
 
+    override(activity, "redraw", () => {});
     assert_hidden("#compose_controls");
     cancel();
     assert.ok(abort_xhr_called);

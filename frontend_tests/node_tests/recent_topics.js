@@ -37,6 +37,12 @@ const topic10 = "topic-10";
 
 let expected_data_to_replace_in_list_widget;
 
+const _document = {
+    hasFocus() {
+        return true;
+    },
+};
+
 const ListWidget = mock_esm("../../static/js/list_widget", {
     modifier: noop,
 
@@ -145,6 +151,8 @@ mock_esm("../../static/js/unread", {
     },
 });
 
+set_global("document", _document);
+
 const ls_container = new Map();
 set_global("localStorage", {
     getItem(key) {
@@ -161,6 +169,7 @@ set_global("localStorage", {
     },
 });
 
+const activity = zrequire("activity");
 const {all_messages_data} = zrequire("all_messages_data");
 const people = zrequire("people");
 const rt = zrequire("recent_topics_ui");
@@ -338,7 +347,7 @@ function test(label, f) {
     });
 }
 
-test("test_recent_topics_show", ({mock_template}) => {
+test("test_recent_topics_show", ({mock_template, override}) => {
     // Note: unread count and urls are fake,
     // since they are generated in external libraries
     // and are not to be tested here.
@@ -360,6 +369,8 @@ test("test_recent_topics_show", ({mock_template}) => {
 
     rt.clear_for_tests();
     rt.process_messages(messages);
+
+    override(activity, "build_user_sidebar", noop);
 
     rt.show();
 

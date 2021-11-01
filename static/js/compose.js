@@ -3,6 +3,7 @@ import _ from "lodash";
 
 import render_compose from "../templates/compose.hbs";
 
+import * as activity from "./activity";
 import * as blueslip from "./blueslip";
 import * as channel from "./channel";
 import * as compose_actions from "./compose_actions";
@@ -425,6 +426,8 @@ export function initialize() {
     $(
         "#stream_message_recipient_stream,#stream_message_recipient_topic,#private_message_recipient",
     ).on("change", update_fade);
+    $("#stream_message_recipient_stream,#private_message_recipient").on("keyup", activity.redraw);
+    $("#stream_message_recipient_stream,#private_message_recipient").on("change", activity.redraw);
     $("#compose-textarea").on("keydown", (event) => {
         compose_ui.handle_keydown(event, $("#compose-textarea").expectOne());
     });

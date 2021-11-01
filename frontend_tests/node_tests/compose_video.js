@@ -11,6 +11,9 @@ const events = require("./lib/events");
 
 const channel = mock_esm("../../static/js/channel");
 const upload = mock_esm("../../static/js/upload");
+mock_esm("../../static/js/activity", {
+    redraw() {},
+});
 mock_esm("../../static/js/giphy", {
     is_giphy_enabled: () => true,
 });

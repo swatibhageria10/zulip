@@ -16,7 +16,7 @@ import * as buddy_data from "./buddy_data";
 import {buddy_list} from "./buddy_list";
 import * as channel from "./channel";
 import * as keydown_util from "./keydown_util";
-import {ListCursor} from "./list_cursor";
+import {ListCursorWithScrollOverride} from "./list_cursor";
 import * as narrow from "./narrow";
 import {page_params} from "./page_params";
 import * as people from "./people";
@@ -129,13 +129,14 @@ export function build_user_sidebar() {
 
     const filter_text = get_filter_text();
 
-    const key_groups = {user_keys: buddy_data.get_filtered_and_sorted_user_ids(filter_text)};
+    const key_groups_and_titles =
+        buddy_data.get_filtered_and_sorted_key_groups_and_titles(filter_text);
 
     blueslip.measure_time("buddy_list.populate", () => {
-        buddy_list.populate(key_groups);
+        buddy_list.populate(key_groups_and_titles);
     });
 
-    return key_groups; // for testing
+    return key_groups_and_titles; // for testing
 }
 
 function do_update_users_for_search() {
@@ -282,7 +283,13 @@ export function on_revoke_away(user_id) {
 
 export function redraw() {
     build_user_sidebar();
-    user_cursor.redraw();
+    // this is a hack to make sure nothing breaks if we call redraw
+    // before complete init, if we investigate our calls to redraw
+    // we should be able to get rid of this conditional
+    // (run puppeteer test realm-creation to verify nothing breaks)
+    if (user_cursor) {
+        user_cursor.redraw();
+    }
     pm_list.update_private_messages();
 }
 
@@ -316,7 +323,7 @@ function keydown_enter_key() {
 }
 
 export function set_cursor_and_filter() {
-    user_cursor = new ListCursor({
+    user_cursor = new ListCursorWithScrollOverride({
         list: buddy_list,
         highlight_class: "highlighted_user",
     });

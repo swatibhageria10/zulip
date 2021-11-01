@@ -3,6 +3,7 @@ import $ from "jquery";
 
 import * as fenced_code from "../shared/js/fenced_code";
 
+import * as activity from "./activity";
 import * as channel from "./channel";
 import * as common from "./common";
 import * as compose from "./compose";
@@ -42,6 +43,9 @@ function hide_box() {
     $("#private-message").hide();
     $(".new_message_textarea").css("min-height", "");
     compose_fade.clear_compose();
+    compose_state.stream_name("");
+    compose_state.private_message_recipient("");
+    activity.redraw();
     $(".message_comp").hide();
     $("#compose_controls").show();
     compose.clear_preview_area();
@@ -146,6 +150,7 @@ export function complete_starting_tasks(msg_type, opts) {
     stream_bar.decorate(opts.stream, $("#stream-message .message_header_stream"), true);
     $(document).trigger(new $.Event("compose_started.zulip", opts));
     update_placeholder_text();
+    activity.redraw();
 }
 
 export function maybe_scroll_up_selected_message() {

@@ -140,6 +140,19 @@ export function topic() {
     return undefined;
 }
 
+export function pm_email_string() {
+    if (current_filter === undefined) {
+        return undefined;
+    }
+
+    const operands = current_filter.operands("pm-with");
+    if (operands.length !== 1) {
+        return undefined;
+    }
+
+    return operands[0];
+}
+
 export function pm_string() {
     // If you are narrowed to a PM conversation
     // with users 4, 5, and 99, this will return "4,5,99"

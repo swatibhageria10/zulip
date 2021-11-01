@@ -4,15 +4,34 @@ const {strict: assert} = require("assert");
 
 const _ = require("lodash");
 
-const {mock_esm, with_field, zrequire} = require("../zjsunit/namespace");
+const {mock_esm, with_field, zrequire, set_global} = require("../zjsunit/namespace");
 const {run_test} = require("../zjsunit/test");
 const blueslip = require("../zjsunit/zblueslip");
 const {page_params, user_settings} = require("../zjsunit/zpage_params");
 
 const timerender = mock_esm("../../static/js/timerender");
 
+const ls_container = new Map();
+set_global("localStorage", {
+    getItem(key) {
+        return ls_container.get(key);
+    },
+    setItem(key, val) {
+        ls_container.set(key, val);
+    },
+    removeItem(key) {
+        ls_container.delete(key);
+    },
+    clear() {
+        ls_container.clear();
+    },
+});
+
+const compose_state = zrequire("compose_state");
 const compose_fade_helper = zrequire("compose_fade_helper");
 const muted_users = zrequire("muted_users");
+const {Filter} = zrequire("../js/filter");
+const narrow_state = zrequire("narrow_state");
 const peer_data = zrequire("peer_data");
 const people = zrequire("people");
 const presence = zrequire("presence");
@@ -267,7 +286,7 @@ test("simple search", () => {
     set_presence(selma.user_id, "active");
     set_presence(me.user_id, "active");
 
-    const user_ids = buddy_data.get_filtered_and_sorted_user_ids("sel");
+    const {user_ids} = buddy_data.get_filtered_and_sorted_user_ids_and_title("sel");
 
     assert.deepEqual(user_ids, [selma.user_id]);
 });
@@ -276,16 +295,146 @@ test("muted users excluded from search", () => {
     people.add_active_user(selma);
     muted_users.add_muted_user(selma.user_id);
 
-    let user_ids = buddy_data.get_filtered_and_sorted_user_ids();
+    let {user_ids} = buddy_data.get_filtered_and_sorted_user_ids_and_title();
     assert.equal(user_ids.includes(selma.user_id), false);
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("sel");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("sel").user_ids;
     assert.deepEqual(user_ids, []);
     assert.ok(!buddy_data.matches_filter("sel", selma.user_id));
 
     muted_users.remove_muted_user(selma.user_id);
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("sel");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("sel").user_ids;
     assert.deepEqual(user_ids, [selma.user_id]);
     assert.ok(buddy_data.matches_filter("sel", selma.user_id));
+});
+
+const denmark = {
+    color: "blue",
+    name: "Denmark",
+    stream_id: 101,
+    subscribed: false,
+};
+
+test("two section layout", ({override}) => {
+    set_presence(selma.user_id, "active");
+
+    stream_data.clear_subscriptions();
+    stream_data.add_sub(denmark);
+    people.add_active_user(selma);
+    set_presence(selma.user_id, "active");
+    peer_data.set_subscribers(denmark.stream_id, [selma.user_id]);
+
+    people.add_active_user(alice);
+    set_presence(alice.user_id, "active");
+    // alice is not subscribed to denmark
+
+    people.add_active_user(bot);
+
+    let filter_terms = [{operator: "stream", operand: "Denmark"}];
+    let filter = new Filter(filter_terms);
+    // we're looking at a stream we're not subscribed to
+    narrow_state.set_current_filter(filter);
+
+    let key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [selma.user_id]);
+    assert.deepEqual(key_groups.other_keys, [me.user_id, alice.user_id]);
+    let selma_section = buddy_data.does_belong_to_users_or_others_section(selma.user_id);
+    assert.equal(selma_section, "users");
+    let alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "others");
+    narrow_state.reset_current_filter();
+    stream_data.clear_subscriptions();
+
+    filter_terms = [{operator: "pm-with", operand: alice.email + "," + bot.email}];
+    filter = new Filter(filter_terms);
+    narrow_state.set_current_filter(filter);
+
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [me.user_id, alice.user_id]);
+    assert.deepEqual(key_groups.other_keys, [selma.user_id]);
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "users");
+    selma_section = buddy_data.does_belong_to_users_or_others_section(selma.user_id);
+    assert.equal(selma_section, "others");
+    narrow_state.reset_current_filter();
+
+    // lets try a user that does not exist:
+    filter_terms = [{operator: "pm-with", operand: "unknownuser@email.com," + alice.email}];
+    filter = new Filter(filter_terms);
+    narrow_state.set_current_filter(filter);
+
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [me.user_id, alice.user_id]);
+    assert.deepEqual(key_groups.other_keys, [selma.user_id]);
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "users");
+    selma_section = buddy_data.does_belong_to_users_or_others_section(selma.user_id);
+    assert.equal(selma_section, "others");
+    narrow_state.reset_current_filter();
+
+    filter_terms = [{operator: "group-pm-with", operand: alice.email + "," + bot.email}];
+    filter = new Filter(filter_terms);
+    // group-pm-with is a searching / interleaved narrow
+    narrow_state.set_current_filter(filter);
+
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [me.user_id, alice.user_id, selma.user_id]);
+    assert.deepEqual(key_groups.other_keys, []);
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "users");
+    narrow_state.reset_current_filter();
+
+    stream_data.add_sub(denmark);
+    peer_data.set_subscribers(denmark.stream_id, [selma.user_id]);
+
+    override(compose_state, "stream_name", () => "denmark");
+    override(compose_state, "private_message_recipient", () => "");
+    compose_state.set_message_type("stream");
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [selma.user_id]);
+    assert.deepEqual(key_groups.other_keys, [me.user_id, alice.user_id]);
+    selma_section = buddy_data.does_belong_to_users_or_others_section(selma.user_id);
+    assert.equal(selma_section, "users");
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "others");
+    compose_state.set_message_type("");
+
+    override(compose_state, "stream_name", () => "");
+    override(compose_state, "private_message_recipient", () => alice.email + "," + bot.email);
+    compose_state.set_message_type("private");
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [me.user_id, alice.user_id]);
+    assert.deepEqual(key_groups.other_keys, [selma.user_id]);
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "users");
+    selma_section = buddy_data.does_belong_to_users_or_others_section(selma.user_id);
+    assert.equal(selma_section, "others");
+    compose_state.set_message_type("");
+
+    // with same overrides as before
+    compose_state.set_message_type("private");
+    filter_terms = [{operator: "pm-with", operand: alice.email + "," + bot.email}];
+    filter = new Filter(filter_terms);
+    narrow_state.set_current_filter(filter);
+    key_groups = buddy_data.get_filtered_and_sorted_key_groups_and_titles();
+    assert.deepEqual(key_groups.user_keys, [me.user_id, alice.user_id]);
+    assert.deepEqual(key_groups.other_keys, [selma.user_id]);
+    compose_state.set_message_type("");
+    narrow_state.reset_current_filter();
+
+    // Is there an improbable case where both "compose_state.stream_name()" and
+    // "compose_state.private_message_recipient()" are valid because we don't
+    // properly reset our compose_state? In such a case, we'd show the
+    // private_message_recipients simply because of the order of the code, but what if
+    // this is incorrect?
+
+    // Is there an even more improbable case where narrow_state also conflicts with the above?
+
+    override(compose_state, "composing", () => true);
+    override(compose_state, "stream_name", () => "");
+    override(compose_state, "private_message_recipient", () => "");
+    blueslip.expect("error", "compose_state composing but not stream or private_message");
+    alice_section = buddy_data.does_belong_to_users_or_others_section(alice.user_id);
+    assert.equal(alice_section, "users");
 });
 
 test("bulk_data_hacks", () => {
@@ -319,30 +468,30 @@ test("bulk_data_hacks", () => {
 
     // Even though we have 1000 users, we only get the 400 active
     // users.  This is a consequence of buddy_data.maybe_shrink_list.
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids();
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title().user_ids;
     assert.equal(user_ids.length, 400);
 
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("").user_ids;
     assert.equal(user_ids.length, 400);
 
     // We don't match on "so", because it's not at the start of a
     // word in the name/email.
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("so");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("so").user_ids;
     assert.equal(user_ids.length, 0);
 
     // We match on "h" for the first name, and the result limit
     // is relaxed for searches.  (We exclude "me", though.)
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("h");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("h").user_ids;
     assert.equal(user_ids.length, 996);
 
     // We match on "p" for the email.
-    user_ids = buddy_data.get_filtered_and_sorted_user_ids("p");
+    user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("p").user_ids;
     assert.equal(user_ids.length, 994);
 
     // Make our shrink limit higher, and go back to an empty search.
     // We won't get all 1000 users, just the present ones.
     with_field(buddy_data, "max_size_before_shrinking", 50000, () => {
-        user_ids = buddy_data.get_filtered_and_sorted_user_ids("");
+        user_ids = buddy_data.get_filtered_and_sorted_user_ids_and_title("").user_ids;
     });
     assert.equal(user_ids.length, 700);
 });
@@ -350,14 +499,18 @@ test("bulk_data_hacks", () => {
 test("always show me", ({override}) => {
     const present_user_ids = [];
     override(presence, "get_user_ids", () => present_user_ids);
-    assert.deepEqual(buddy_data.get_filtered_and_sorted_user_ids(""), [me.user_id]);
+    assert.deepEqual(buddy_data.get_filtered_and_sorted_user_ids_and_title("").user_ids, [
+        me.user_id,
+    ]);
 
     // Make sure we didn't mutate the list passed to us.
     assert.deepEqual(present_user_ids, []);
 
     // try to make us show twice
     present_user_ids.push(me.user_id);
-    assert.deepEqual(buddy_data.get_filtered_and_sorted_user_ids(""), [me.user_id]);
+    assert.deepEqual(buddy_data.get_filtered_and_sorted_user_ids_and_title("").user_ids, [
+        me.user_id,
+    ]);
 });
 
 test("user_status", () => {
@@ -487,5 +640,5 @@ test("error handling", ({override}) => {
     override(presence, "get_user_ids", () => [42]);
     blueslip.expect("error", "Unknown user_id in get_by_user_id: 42");
     blueslip.expect("warn", "Got user_id in presence but not people: 42");
-    buddy_data.get_filtered_and_sorted_user_ids();
+    buddy_data.get_filtered_and_sorted_user_ids_and_title();
 });

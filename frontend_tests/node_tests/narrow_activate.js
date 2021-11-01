@@ -9,6 +9,7 @@ mock_esm("../../static/js/resize", {
     resize_stream_filters_container: () => {},
 });
 
+const activity = mock_esm("../../static/js/activity");
 const all_messages_data = mock_esm("../../static/js/all_messages_data");
 const channel = mock_esm("../../static/js/channel");
 const compose_actions = mock_esm("../../static/js/compose_actions");
@@ -75,6 +76,7 @@ function test_helper() {
         };
     }
 
+    stub(activity, "redraw");
     stub(compose_actions, "on_narrow");
     stub(compose_closed_ui, "update_reply_recipient_label");
     stub(hashchange, "save_narrow");
@@ -196,6 +198,7 @@ run_test("basics", () => {
         [notifications, "redraw_title"],
         [message_scroll, "hide_top_of_narrow_notices"],
         [message_scroll, "hide_indicators"],
+        [activity, "redraw"],
         [ui_util, "change_tab_to"],
         [unread_ops, "process_visible"],
         [hashchange, "save_narrow"],

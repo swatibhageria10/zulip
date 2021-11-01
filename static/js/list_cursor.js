@@ -143,3 +143,20 @@ export class ListCursor {
         this.go_to(key);
     }
 }
+
+// This class, as the name suggests, serves the sole purpose of overriding
+// the adjust_scroll logic, this is necessary because the addition of a
+// "pos: sticky" heading element *within* the scroll container in the
+// buddy_list breaks our calculation for scroll_deltas, the use of
+// scrollIntoView is still buggy when we scroll upwards, just in a
+// different way. However, it is comparatively better.
+export class ListCursorWithScrollOverride extends ListCursor {
+    constructor({highlight_class, list}) {
+        super({highlight_class, list});
+    }
+
+    // override adjust scroll to replace scroll_util logic with scrollIntoView
+    adjust_scroll = (li) => {
+        li[0].scrollIntoView(false);
+    };
+}
